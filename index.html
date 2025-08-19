@@ -1,0 +1,279 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Command Center</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background-color: #252526;
+            padding: 20px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #4ec9b0;
+            text-align: center;
+        }
+
+        .sensor-reading {
+            font-size: 2em;
+            margin: 20px 0;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 5px;
+            transition: background-color 0.5s ease;
+        }
+
+        .sensor-reading span {
+            color: #9cdcfe;
+        }
+
+        /* THIS IS THE NEW ALERT STYLE! */
+        .alert {
+            background-color: #5a1d1d;
+            /* Dark red background */
+            color: #f4a0a0;
+            /* Lighter red text */
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
+            }
+        }
+
+        /* NEW styling for the settings panel */
+        fieldset {
+            border: 1px solid #444;
+            border-radius: 5px;
+            margin-top: 30px;
+        }
+
+        legend {
+            color: #4ec9b0;
+            padding: 0 10px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            padding: 10px;
+        }
+
+        .settings-grid label {
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        .settings-grid input {
+            width: 100%;
+            padding: 5px;
+            background-color: #3c3c3c;
+            border: 1px solid #666;
+            color: #d4d4d4;
+            border-radius: 3px;
+        }
+
+        #set-thresholds-btn {
+            grid-column: 1 / -1;
+            /* Span both columns */
+            padding: 10px;
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s;
+        }
+
+        #set-thresholds-btn:hover {
+            background-color: #1579ba;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>🚀 Wireless Probe Status</h1>
+
+        <div id="temp-reading" class="sensor-reading">
+            🌡️ Temperature: <span id="temp-value">--</span> °C
+        </div>
+        <div id="hum-reading" class="sensor-reading">
+            💧 Humidity: <span id="hum-value">--</span> %
+        </div>
+
+        <fieldset>
+            <legend>Alert Thresholds</legend>
+            <div class="settings-grid">
+                <label for="temp_min">Temp Min (°C):</label>
+                <input type="number" id="temp_min" step="0.1">
+
+                <label for="temp_max">Temp Max (°C):</label>
+                <input type="number" id="temp_max" step="0.1">
+
+                <label for="hum_min">Humidity Min (%):</label>
+                <input type="number" id="hum_min" step="0.1">
+
+                <label for="hum_max">Humidity Max (%):</label>
+                <input type="number" id="hum_max" step="0.1">
+
+                <button id="set-thresholds-btn">Set & Save Thresholds</button>
+            </div>
+        </fieldset>
+    </div>
+
+    <script>
+        // --- Get references to all our important HTML elements ---
+        const tempValueEl = document.getElementById('temp-value');
+        const humValueEl = document.getElementById('hum-value');
+        const tempReadingEl = document.getElementById('temp-reading');
+        const humReadingEl = document.getElementById('hum-reading');
+
+        const tempMinInput = document.getElementById('temp_min');
+        const tempMaxInput = document.getElementById('temp_max');
+        const humMinInput = document.getElementById('hum_min');
+        const humMaxInput = document.getElementById('hum_max');
+        const setBtn = document.getElementById('set-thresholds-btn');
+
+        // --- State variables to prevent alert spam ---
+        let isTempInAlert = false;
+        let isHumInAlert = false;
+
+        // --- Core Functions ---
+
+        // Function to fetch and display the current thresholds
+        async function fetchAndSetThresholds() {
+            try {
+                const response = await fetch('/get_thresholds');
+                const thresholds = await response.json();
+                tempMinInput.value = thresholds.temp_min;
+                tempMaxInput.value = thresholds.temp_max;
+                humMinInput.value = thresholds.hum_min;
+                humMaxInput.value = thresholds.hum_max;
+            } catch (error) {
+                console.error("Could not fetch thresholds:", error);
+            }
+        }
+
+        // The main function to update data and check for alerts
+        async function updateData() {
+            try {
+                // Fetch the latest sensor data
+                const response = await fetch('/get_latest_data');
+                const data = await response.json();
+
+                // Update the display
+                tempValueEl.textContent = data.temperature.toFixed(2);
+                humValueEl.textContent = data.humidity.toFixed(2);
+
+                // --- THE ALERT LOGIC ---
+                const temp = data.temperature;
+                const hum = data.humidity;
+                const tempMin = parseFloat(tempMinInput.value);
+                const tempMax = parseFloat(tempMaxInput.value);
+                const humMin = parseFloat(humMinInput.value);
+                const humMax = parseFloat(humMaxInput.value);
+
+                // Check Temperature
+                if (temp < tempMin || temp > tempMax) {
+                    tempReadingEl.classList.add('alert');
+                    if (!isTempInAlert) { // Only alert on the first time it becomes abnormal
+                        alert(`🚨 TEMPERATURE ALERT! 🚨\nCurrent: ${temp}°C\nAcceptable Range: ${tempMin}°C - ${tempMax}°C`);
+                        isTempInAlert = true;
+                    }
+                } else {
+                    tempReadingEl.classList.remove('alert');
+                    isTempInAlert = false; // Reset alert status when back to normal
+                }
+
+                // Check Humidity
+                if (hum < humMin || hum > humMax) {
+                    humReadingEl.classList.add('alert');
+                    if (!isHumInAlert) {
+                        alert(`💧 HUMIDITY ALERT! 💧\nCurrent: ${hum}%\nAcceptable Range: ${humMin}% - ${humMax}%`);
+                        isHumInAlert = true;
+                    }
+                } else {
+                    humReadingEl.classList.remove('alert');
+                    isHumInAlert = false;
+                }
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
+        }
+
+        // Function to send the new thresholds to the server
+        async function saveNewThresholds() {
+            const newThresholds = {
+                temp_min: parseFloat(tempMinInput.value),
+                temp_max: parseFloat(tempMaxInput.value),
+                hum_min: parseFloat(humMinInput.value),
+                hum_max: parseFloat(humMaxInput.value)
+            };
+
+            try {
+                const response = await fetch('/set_thresholds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newThresholds)
+                });
+                if (response.ok) {
+                    alert('Thresholds saved successfully on the server!');
+                    // Force an immediate re-check with the new values
+                    updateData();
+                } else {
+                    alert('Failed to save thresholds.');
+                }
+            } catch (error) {
+                console.error("Error saving thresholds:", error);
+            }
+        }
+
+        // --- Event Listeners and Initializers ---
+
+        // When the "Set" button is clicked, save the new thresholds
+        setBtn.addEventListener('click', saveNewThresholds);
+
+        // When the page first loads...
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndSetThresholds(); // Get the current rules from the server
+            updateData(); // Get the first data reading
+            setInterval(updateData, 5000); // Then, check for new data every 5 seconds
+        });
+    </script>
+</body>
+
+</html>
