@@ -1,7 +1,12 @@
 # This code is for a MicroPython IoT device that reads temperature and humidity
 # from a DHT11 sensor and sends the data to a FastAPI server.
-# It is designed to run on a Raspberry Pi Pico or similar microcontroller.
-# It won't run on a regular computer.
+# It is designed to run on any microcontroller capable of running MicroPython.
+# The Arduino nano ESP32 supports micropython it is more energy efficient as
+# it supports sleep mode reducing the current drawn to a few microAmps.
+# The Raspberry Pi Zero has a Linus bases OS that it has to run on a 1Ghz
+# single core CPU. Needless to say it consumes a lot more power and not ideal
+# for battery powered devices.
+# This code won't run on a regular computer.
 
 from machine import Pin
 from time import sleep
@@ -75,3 +80,4 @@ while True:
     # Waiting 5 seconds for the next cycle
     print("Waiting 5 seconds...")
     sleep(5)
+
